@@ -10,16 +10,128 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(tidyverse)
+library(lubridate)
 ```
+# Preliminary exploration
 
+### Import dataset
 ```{r}
 df <- read_csv('KaggleV2-May-2016.csv')
 ```
 
+
 ```{r}
 head(df)
+### Categorize gender, scholarship, hipertension, diabetes, alcoholism, handcap, SMS_received, No-show
+### examine date columns for further processing
+### examine Neighbourhood for categorization
+### drop IDs
 ```
 ```{r}
-unique(df$Neighbourhood)
+summary(df)
+```
+
+### Feature Engineering
+```{r}
+df <- read_csv('KaggleV2-May-2016.csv') %>% 
+  mutate_if(~is.character(.) && n_distinct(.)<10, as_factor) %>% 
+  mutate_if(~is.double(.) && n_distinct(.)<10, as_factor)
+
+head(df)
+```
+remove ID columns, change column name No-show
+```{r}
+df <- df %>% 
+  select(-c(PatientId, AppointmentID))
+
+names(df)[ncol(df)] <- "No_show"
+```
+
+
+```{r}
+summary(df)
+```
+
+
+
+### Investigate Neighbourhood column
+```{r}
+df %>% 
+  group_by(Neighbourhood) %>% 
+  tally(sort=TRUE)
+```
+Possible methods:
+1. categorize, move minority neighbourhoods into "others"
+2. Regroup neighbourhoods into larger geographical groups (district, city, etc)
+
+```{r}
+df <- df %>% 
+  mutate(Neighbourhood = as_factor(Neighbourhood))
+```
+
+
+### Investigate Date columns
+```{r}
+range(df$AppointmentDay)
+range(df$ScheduledDay)
+```
+year seems unimportant
+possible methods:
+1. extract month, day, hours for further processing (workday vs holiday, morning/afternoon/night)
+2. days between scheduled day and appointment day.
+
+extract month, day from appointment. year, month, day, hour from scheduled.
+```{r}
+df <- df %>% 
+  mutate(App_month = month(AppointmentDay),
+         App_day = day(AppointmentDay),
+         Sche_year = year(ScheduledDay),
+         Sche_month = month(ScheduledDay),
+         Sche_day = day(ScheduledDay),
+         Sche_hour = hour(ScheduledDay))
+
+head(df)
+```
+
+time gap between scheduled day and appointment day
+```{r}
+df <- df %>% 
+  mutate(Time_gap = difftime(AppointmentDay, as.Date(ScheduledDay), units="days")) %>% 
+  mutate(Time_gap = as.integer(Time_gap))
+
+sample(df$Time_gap,5)
+```
+is_workday
+```{r}
+### All Brazilian holidays between 04-29 to 06-08
+holidays = c(ymd("2016-05-01"), ymd("2016-05-08"))
+
+is_holiday = df$AppointmentDay %in% holidays
+sum(is_holiday)
+# No appointment made in holiday
+```
+
+```{r}
+is_weekday = wday(df$AppointmentDay)<6
+sum(is_weekday)/length(is_weekday)
+
+df <- df %>% 
+  mutate(is_workday = as_factor(as.integer(is_weekday)))
+
+levels(df$is_workday)
+```
+
+
+drop date column
+```{r}
+df <- df %>% 
+  select(-c(AppointmentDay, ScheduledDay))
+
+head(df)
+```
+
+wrtie a .csv file
+```{r}
+write_csv(df, "cleaned_data.csv")
 ```
 
