@@ -4,4 +4,4 @@ Groupwork for Group9 MDZZ
 daladala
 
 Test line for Ruizhi's setup.
-from ruizhis
+from ruizhi
