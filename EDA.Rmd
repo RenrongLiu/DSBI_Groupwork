@@ -1,0 +1,62 @@
+---
+title: "EDA"
+output: html_document
+date: '2022-04-29'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## EDA 
+```{r}
+library(tidyverse)
+library(ggplot2)
+```
+
+```{r}
+df <- read_csv("cleaned_data.csv") %>% 
+  mutate_if(~is.numeric(.) && n_distinct(.) <8, as_factor) %>% 
+  mutate_if(~is_character(.), as_factor)
+```
+```{r}
+colSums(is.na(df))
+```
+
+```{r}
+sum(duplicated(df))
+```
+remove duplicates later.
+
+
+### Visualization
+```{r}
+quants = c("Age", "App_day", "Sche_month", "Sche_day", "Sche_hour", "Time_gap")
+cate = c("Gender", "Neighbourhood", "Scholarship", "Hipertension", "Diabetes", "Alcoholism", "Handcap", "SMS_received", "App_month", "Sche_year", "is_workday")
+```
+
+```{r}
+for (i in quants){
+    plot <- ggplot(df, aes_string(x=i, fill=df$No_show)) +
+    geom_histogram(position="dodge")
+    print(plot)
+}
+```
+
+```{r}
+
+ggplot(df, aes(x=Gender)) + geom_bar(aes(fill=No_show))
+ggplot(df, aes(x=Neighbourhood)) + geom_bar(aes(fill=No_show))+ scale_x_discrete(labels = NULL, breaks = NULL) + labs(x = "")
+ggplot(df, aes(x=Scholarship)) + geom_bar(aes(fill=No_show))
+ggplot(df, aes(x=Hipertension)) + geom_bar(aes(fill=No_show))
+ggplot(df, aes(x=Diabetes)) + geom_bar(aes(fill=No_show))
+ggplot(df, aes(x=Alcoholism)) + geom_bar(aes(fill=No_show))
+ggplot(df, aes(x=Handcap)) + geom_bar(aes(fill=No_show))
+ggplot(df, aes(x=SMS_received)) + geom_bar(aes(fill=No_show))
+ggplot(df, aes(x=App_month)) + geom_bar(aes(fill=No_show))
+ggplot(df, aes(x=Sche_year)) + geom_bar(aes(fill=No_show))
+ggplot(df, aes(x=is_workday)) + geom_bar(aes(fill=No_show))
+
+
+```
+
