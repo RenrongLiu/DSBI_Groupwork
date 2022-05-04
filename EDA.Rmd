@@ -59,4 +59,15 @@ ggplot(df, aes(x=is_workday)) + geom_bar(aes(fill=No_show))
 
 
 ```
+```{r}
+install.packages("GGally")
+```
+
+
+```{r}
+library(GGally)
+```
+```{r}
+ggpairs(df[quants],cardinality_threshold=100)
+```
 
