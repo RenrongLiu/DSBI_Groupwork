@@ -16,7 +16,7 @@ library(lubridate)
 
 ### Import dataset
 ```{r}
-df <- read_csv('KaggleV2-May-2016.csv')
+df1 <- read_csv('KaggleV2-May-2016.csv')
 ```
 
 

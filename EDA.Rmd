@@ -58,5 +58,14 @@ ggplot(df, aes(x=Sche_year)) + geom_bar(aes(fill=No_show))
 ggplot(df, aes(x=is_workday)) + geom_bar(aes(fill=No_show))
 
 
+
+```
+
+```{r}
+for (i in quants){
+    plot <- ggplot(df, aes_string(df$No_show,i)) +
+    geom_violin(aes(fill=No_show))
+    print(plot)
+}
 ```
 
