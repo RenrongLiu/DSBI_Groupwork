@@ -68,4 +68,15 @@ for (i in quants){
     print(plot)
 }
 ```
+```{r}
+install.packages("GGally")
+```
+
+
+```{r}
+library(GGally)
+```
+```{r}
+ggpairs(df[quants],cardinality_threshold=100)
+```
 
