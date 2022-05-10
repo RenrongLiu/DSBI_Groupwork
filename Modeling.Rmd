@@ -1,0 +1,220 @@
+---
+title: "Model"
+author: "Ruizhi Xu"
+date: "5/4/2022"
+output: html_document
+---
+#Libraries
+```{r}
+rm(list = ls())     # clear the workspace 
+library(ISLR)       # load ISLR data package
+library(tidyverse)
+library(ggplot2)
+```
+#Read Data
+```{r}
+df <- read_csv("cleaned_data.csv") %>% 
+  mutate_if(~is.numeric(.) && n_distinct(.) <8, as_factor) %>% 
+  mutate_if(~is_character(.), as_factor)
+df_No<-df[df$No_show=="No",]
+set.seed(1)
+index<-sample(nrow(df_No),22319)
+df_No<-df_No[index,]
+df_Yes<-df[df$No_show=="Yes",]
+dim(df_No)
+dim(df_Yes)
+df<-rbind(df_No,df_Yes)
+write.csv(df,file='balanced data.csv')
+```
+
+#Split the Data (Holdout sampling)
+```{r}
+df<-df[,-c(3)]
+set.seed(1)
+index<-sample(nrow(df),0.2*nrow(df))
+test<-df[index,]
+train<-df[-index,]
+```
+
+
+#Modeling 
+## Classification tree
+```{r}
+library(rpart)
+library(rpart.plot)
+```
+
+```{r}
+set.seed(1)   # set a random seed 
+full_tree<-rpart(No_show~.,
+                     data=train, 
+                     method="class",
+                     control=rpart.control(cp=0,maxdepth=10))
+rpart.plot(full_tree)
+```
+
+
+```{r}
+ct_pred_prob<-predict(full_tree,test)[,2]
+ct_pred_class<-predict(full_tree,test,type="class")
+head(test,20)
+```
+###Cross Validation
+```{r}
+printcp(full_tree)
+plotcp(full_tree)    
+```
+
+
+```{r}
+min_xerror<-full_tree$cptable[which.min(full_tree$cptable[,"xerror"]),]
+min_xerror
+
+# prune tree with minimum cp value
+min_xerror_tree<-prune(full_tree, cp=min_xerror[1])
+rpart.plot(min_xerror_tree)
+```
+```{r}
+bp_tree<-min_xerror_tree
+ct_bp_pred_prob<-predict(bp_tree,test)[,2]
+ct_bp_pred_class=ifelse(ct_bp_pred_prob>0.5,"Yes","No")
+```
+###Metrics
+```{r}
+table(ct_bp_pred_class==test$No_show)  
+5935/(2922+5935)
+table(ct_bp_pred_class,test$No_show, dnn=c("predicted","actual")) 
+```
+
+##Random Forest
+```{r}
+library(randomForest)
+```
+
+```{r}
+set.seed(1)
+rf_training_model<-randomForest(No_show~.,              # model formula
+                       data=train,          # use a training dataset for building a model
+                       ntree=500,                     
+                       cutoff=c(0.5,0.5), 
+                       mtry=2, ## number of variables considered in each splits when lots of variables is useful
+                       importance=TRUE)
+rf_training_model
+```
+###Hypertuning
+```{r}
+set.seed(1)              
+res <- tuneRF(x = train%>%select(-No_show),
+              y = train$No_show,mtryStart=2,
+              ntreeTry = 500)
+```
+
+```{r}
+rf_best_model<-randomForest(No_show~.,              # model formula
+                       data=train,          # use a training dataset for building a model
+                       ntree=500,                     
+                       cutoff=c(0.5,0.5), 
+                       mtry=2,
+                       importance=TRUE)
+rf_best_model
+```
+###Metrics
+```{r}
+rf_pred_prob<-predict(rf_best_model,test,type="prob")[,2]   #use a test dataset for model evaluation
+rf_pred_class<-predict(rf_best_model,test,type="class")
+table(test$No_show==rf_pred_class) 
+5962/(2965+5962)
+table(rf_pred_class,test$No_show, dnn=c("predicted","actual")) 
+```
+##SVM
+```{r}
+library(e1071)
+model_svm<-svm(formula= No_show ~ ., # model formula 
+               data=train,                   # dataset
+               kernel="linear",  # this is the form of the decision boundary. Let's start with a linear kernel. 
+               cost=0.1)   
+```
+
+```{r}
+dv<-data.frame(model_svm$decision.values)
+head(dv)
+
+ggplot(dv,aes(x=No.Yes)) +
+  geom_histogram(colour="black",fill="white")
+```
+
+```{r}
+head(model_svm$fitted)      #class prediction result
+table(model_svm$fitted)
+
+predicted_svm<-predict(model_svm, test, decision.values = TRUE)   # to get the decision value  ##TRUE get decision values
+head(attr(predicted_svm, "decision.values"))
+```
+
+###Metrics
+
+```{r}
+svm_pred_class <- predict(model_svm, test)           #class prediction
+svm_dv<-c(attr(predicted_svm, "decision.values"))
+table(test$No_show==svm_pred_class) 
+table(svm_pred_class,test$No_show, dnn=c("predicted","actual"))
+5461/(5461+3466)
+
+
+```
+
+##Logistic Regression
+```{r}
+set.seed(1)
+logit_training_model<-glm(No_show~.,family="binomial",data=train)
+summary(logit_training_model)
+
+logit_pred_prob<-predict(logit_training_model,test,type="response")
+## Logsitc regression could not use the class type to predict, we need to use ifelse
+logit_pred_class<-ifelse(logit_pred_prob>0.5,"Yes","No")
+
+table(test$No_show==logit_pred_class)
+5608/(5608+3319)
+
+```
+###Hypertuning(Stepwise Regression)
+```{r}
+# Specify a null model with no predictors
+null_model <- glm(No_show~1, data = train, family = "binomial")
+
+# Specify the full model using all of the potential predictors
+full_model <- glm(No_show~., data = train, family = "binomial")
+
+# Use a forward stepwise algorithm to build a parsimonious model
+forward_model <- step(null_model, scope = list(lower = null_model, upper = full_model), direction = "forward")
+summary(forward_model)
+# Use a forward stepwise algorithm to build a parsimonious model
+backward_model <- step(full_model, scope = list(lower = null_model, upper = full_model), direction = "backward")
+summary(backward_model)
+```
+
+```{r}
+#Since forward model has lower AIC, we choose variables in forward model summary
+logit_best_model<-glm(No_show~Time_gap+Age+SMS_received+Sche_month+Sche_hour+Scholarship+App_month+is_workday+Diabetes+Alcoholism,family="binomial",data=train)
+summary(logit_best_model)
+
+```
+###Metrics
+```{r}
+test$logit_pred_prob<-predict(logit_best_model,test,type="response")
+test$logit_pred_class<-ifelse(test$logit_pred_prob>0.5,"Yes","No") 
+glimpse(test)
+table(test$No_show==test$logit_pred_class)
+5594/(5594+3333)
+```
+
+
+
+
+
+
+
+
+
+```
+
