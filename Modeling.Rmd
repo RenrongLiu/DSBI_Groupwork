@@ -9,7 +9,7 @@ output: html_document
 rm(list = ls())     # clear the workspace 
 library(ISLR)       # load ISLR data package
 library(tidyverse)
-library(ggplot2)
+library(ggplot2) 
 ```
 #Read Data
 ```{r}
