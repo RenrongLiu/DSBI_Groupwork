@@ -130,8 +130,26 @@ df <- df %>%
 head(df)
 ```
 
+
+### Undersampling
+```{r}
+set.seed(1)
+
+No_show_df <- df[df$No_show=="No",]
+No_show_df <- No_show_df[sample(nrow(No_show_df), 22319), ]
+Yes_show_df <- df[df$No_show=="Yes",]
+
+cleaned_df <- rbind(No_show_df, Yes_show_df)
+```
+
+```{r}
+summary(cleaned_df)
+```
+
+
+
 wrtie a .csv file
 ```{r}
-write_csv(df, "cleaned_data.csv")
+write_csv(cleaned_df, "cleaned_data.csv")
 ```
 

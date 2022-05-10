@@ -1,0 +1,64 @@
+---
+title: "Modeling"
+author: "Ruizhi Xu"
+date: "5/4/2022"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+# Read Data
+```{r cars}
+df <- read_csv("cleaned_data.csv") %>% 
+  mutate_if(~is.numeric(.) && n_distinct(.) <8, as_factor) %>% 
+  mutate_if(~is_character(.), as_factor)
+```
+# Split data (Holdout Sampling)
+```{r}
+set.seed(1)
+index<-sample(nrow(df),0.2*nrow(df))
+test<-df[index,]
+train<-df[-index,]
+
+```
+# KNN
+```{r}
+library(FNN)
+library(clss)
+knn.pred=0
+train["No_show"]->train.y
+train[,-c(10)]->train.x
+test["No_show"]->test.y
+test[,-c(10)]->test.x
+for(i in 1:50) 
+  knn.pred[i]=knn(train.x,test.x,train.y,k=i)
+knn.pred=knn(train.x,test.x,train.y,k=1)
+
+```
+# Decision Tree
+```{r}
+library(rpart)
+library(rpart.plot)
+```
+```{r}
+ct_model<-rpart(No_show~.,           # model formula
+                data=train,                             # dataset
+                method="class",                           # "class" indicates a classification tree model 
+                control=rpart.control(cp=0.015))
+rpart.plot(ct_model)
+```
+
+```{r}
+test$ct_pred_prob<-predict(ct_model,test)[,2]
+test
+```
+
