@@ -10,6 +10,18 @@ rm(list = ls())     # clear the workspace
 library(ISLR)       # load ISLR data package
 library(tidyverse)
 library(ggplot2) 
+library(plyr)
+library(readr)          # Data Input
+library(lubridate)      # Data Manupulation
+library(dplyr)          # Data Manipulation
+library(reshape2)       # Data Manipulation
+library(caTools)        # Data Manipulation
+library(ggplot2)        # Data Visualization
+library(viridis)        # Data Visualization
+library(ggthemes)       # Data Visualization
+library(DMwR)           # Handle Missing Values
+library(pROC)           # Metrics
+library(caret)          # Machine Learning
 ```
 #Read Data
 ```{r}
@@ -201,20 +213,200 @@ summary(logit_best_model)
 ```
 ###Metrics
 ```{r}
-test$logit_pred_prob<-predict(logit_best_model,test,type="response")
-test$logit_pred_class<-ifelse(test$logit_pred_prob>0.5,"Yes","No") 
+logit_pred_prob<-predict(logit_best_model,test,type="response")
+logit_pred_class<-ifelse(logit_pred_prob>0.5,"Yes","No") 
 glimpse(test)
-table(test$No_show==test$logit_pred_class)
+table(test$No_show==logit_pred_class)
 5594/(5594+3333)
+table(logit_pred_class,test$No_show, dnn=c("predicted","actual")) 
+```
+##XGboost
+```{r}
+
+fit.control = trainControl(method="cv",number=3,
+                           classProbs = TRUE,summaryFunction = twoClassSummary)
+
+xgb.grid = expand.grid(eta=c(0.05),
+                       max_depth=c(4),colsample_bytree=1,
+                       subsample=1,nrounds=1501,gamma=0,min_child_weight=5)
+set.seed(38)
+xgb_model = train(No_show ~ .,data=train,method="xgbTree",metric="ROC",
+                  tuneGrid=xgb.grid, trControl=fit.control)
+
+```
+
+###Metric
+```{r}
+xgb_class = predict(xgb_model,newdata=test)
+xgb_probs = predict(xgb_model,newdata=test,type="prob")[,2]
+
+table(xgb_class==test$No_show)
+5931/(5931+2996)
+table(xgb_class,test$No_show, dnn=c("predicted","actual")) 
+
+
+```
+
+
+#Modeling(after feature selection)
+
+##Random Forest
+```{r}
+set.seed(1)
+rf_sel_training_model<-randomForest(No_show~Time_gap+Age+Sche_hour+SMS_received,              # model formula
+                       data=train,          # use a training dataset for building a model
+                       ntree=500,                     
+                       cutoff=c(0.5,0.5), 
+                       mtry=2, ## number of variables considered in each splits when lots of variables is useful
+                       importance=TRUE)
+rf_sel_training_model
+```
+
+###Hypertuning
+```{r}
+set.seed(1)              
+res <- tuneRF(x = train%>%select(-No_show),
+              y = train$No_show,mtryStart=2,
+              ntreeTry = 500)
+```
+
+
+```{r}
+rf_sel_best_model<-randomForest(No_show~Time_gap+Age+Sche_hour+SMS_received,              # model formula
+                       data=train,          # use a training dataset for building a model
+                       ntree=500,                     
+                       cutoff=c(0.5,0.5), 
+                       mtry=2,
+                       importance=TRUE)
+rf_sel_best_model
+```
+
+###Metric
+```{r}
+rf_sel_pred_prob<-predict(rf_sel_best_model,test,type="prob")[,2]   #use a test dataset for model evaluation
+rf_sel_pred_class<-predict(rf_sel_best_model,test,type="class")
+table(test$No_show==rf_sel_pred_class) 
+5794/(5794+3133)
+table(rf_sel_pred_class,test$No_show, dnn=c("predicted","actual")) 
+```
+
+##SVM
+```{r}
+library(e1071)
+model_sel_svm<-svm(formula= No_show ~ Time_gap+Age+Sche_hour+SMS_received, # model formula 
+               data=train,                   # dataset
+               kernel="linear",  # this is the form of the decision boundary. Let's start with a linear kernel. 
+               cost=0.1)   
+```
+
+```{r}
+sel_dv<-data.frame(model_sel_svm$decision.values)
+head(dv)
+
+ggplot(sel_dv,aes(x=No.Yes)) +
+  geom_histogram(colour="black",fill="white")
+```
+
+```{r}
+
+predicted_sel_svm<-predict(model_sel_svm, test, decision.values = TRUE)   # to get the decision value  ##TRUE get decision values
+head(attr(predicted_sel_svm, "decision.values"))
+```
+###Metric
+```{r}
+svm_sel_pred_class <- predict(model_sel_svm, test)           #class prediction
+svm_sel_dv<-c(attr(predicted_sel_svm, "decision.values"))
+table(test$No_show==svm_sel_pred_class) 
+table(svm_sel_pred_class,test$No_show, dnn=c("predicted","actual"))
+5477/(5477+3480)
+```
+##Logistic Regression
+```{r}
+set.seed(1)
+logit_sel_training_model<-glm(No_show~Time_gap+Age+Sche_hour+SMS_received,family="binomial",data=train)
+summary(logit_sel_training_model)
+
+logit_sel_pred_prob<-predict(logit_sel_training_model,test,type="response")
+## Logsitc regression could not use the class type to predict, we need to use ifelse
+logit_sel_pred_class<-ifelse(logit_sel_pred_prob>0.5,"Yes","No")
+
+table(test$No_show==logit_sel_pred_class)
+5600/(5600+3327)
+```
+###Hypertuning 
+```{r}
+# Specify a null model with no predictors
+null_model <- glm(No_show~1, data = train, family = "binomial")
+
+# Specify the full model using all of the potential predictors
+full_model <- glm(No_show~Time_gap+Age+Sche_hour+SMS_received, data = train, family = "binomial")
+
+# Use a forward stepwise algorithm to build a parsimonious model
+forward_model <- step(null_model, scope = list(lower = null_model, upper = full_model), direction = "forward")
+summary(forward_model)
+# Use a forward stepwise algorithm to build a parsimonious model
+backward_model <- step(full_model, scope = list(lower = null_model, upper = full_model), direction = "backward")
+summary(backward_model)
+```
+###Metrics
+```{r}
+#Best model is all those four varibales included 
+table(test$No_show==logit_sel_pred_class)
+table(logit_sel_pred_class,test$No_show, dnn=c("predicted","actual")) 
+5600/(5600+3327)
+```
+##XGboost
+```{r}
+fit.control = trainControl(method="cv",number=3,
+                           classProbs = TRUE,summaryFunction = twoClassSummary)
+
+xgb.grid = expand.grid(eta=c(0.05),
+                       max_depth=c(4),colsample_bytree=1,
+                       subsample=1,nrounds=1501,gamma=0,min_child_weight=5)
+set.seed(38)
+xgb_sel_model = train(No_show ~ Time_gap+Age+Sche_hour+SMS_received,data=train,method="xgbTree",metric="ROC",
+                  tuneGrid=xgb.grid, trControl=fit.control)
+
+```
+
+###Metric
+```{r}
+xgb_sel_class = predict(xgb_sel_model,newdata=test)
+xgb_sel_probs = predict(xgb_sel_model,newdata=test,type="prob")[,2]
+
+table(xgb_sel_class==test$No_show)
+5910/(5910+3017)
+table(xgb_sel_class,test$No_show, dnn=c("predicted","actual")) 
+```
+
+
+
+# Performance Visualization with ROC
+```{r}
+library(pROC)
+rf_roc<-roc(test$No_show,rf_pred_prob,auc=TRUE)
+ct_roc<-roc(test$No_show,ct_bp_pred_prob,auc=TRUE)
+svm_roc<-roc(test$No_show,svm_dv,auc=TRUE)
+logit_roc<-roc(test$No_show,logit_pred_prob,auc=TRUE)
+rf_sel_roc<-roc(test$No_show,rf_sel_pred_prob,auc=TRUE)
+svm_sel_roc<-roc(test$No_show,svm_sel_dv,auc=TRUE)
+logit_sel_roc<-roc(test$No_show,logit_sel_pred_prob,auc=TRUE)
+xgb_roc<-roc(test$No_show,xgb_probs,auc=TRUE)
+
+plot(ct_roc,print.auc=TRUE,col="blue")
+plot(rf_roc,print.auc=TRUE,print.auc.y=.4,col="green", add=TRUE)
+plot(logit_roc,print.auc=TRUE,print.auc.y=.3, col="red",add=TRUE)
+plot(svm_roc,print.auc=TRUE,print.auc.y=.2, col="black",add=TRUE)
+plot(rf_sel_roc,print.auc=TRUE,print.auc.y=.4,col="yellow", add=TRUE)
+plot(logit_sel_roc,print.auc=TRUE,print.auc.y=.3, col="pink",add=TRUE)
+plot(svm_sel_roc,print.auc=TRUE,print.auc.y=.2, col="blue",add=TRUE)
+cbind(rf_roc,ct_roc,svm_roc,logit_roc,rf_sel_roc,svm_sel_roc,logit_sel_roc,xgb_roc)->roc_table
+roc_table['auc',]->roc_table
+
+
 ```
 
 
 
 
-
-
-
-
-
-```
 
