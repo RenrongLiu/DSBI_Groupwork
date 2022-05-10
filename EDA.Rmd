@@ -20,6 +20,10 @@ df <- read_csv("cleaned_data.csv") %>%
   mutate_if(~is_character(.), as_factor)
 ```
 ```{r}
+summary(df)
+```
+
+```{r}
 colSums(is.na(df))
 ```
 
@@ -31,16 +35,16 @@ remove duplicates later.
 
 ### Visualization
 ```{r}
-quants = c("Age", "App_day", "Sche_month", "Sche_day", "Sche_hour", "Time_gap")
-cate = c("Gender", "Neighbourhood", "Scholarship", "Hipertension", "Diabetes", "Alcoholism", "Handcap", "SMS_received", "App_month", "Sche_year", "is_workday")
+quants = c("Age", "App_day", "Sche_day", "Sche_hour", "Time_gap")
+cate = c("Gender", "Neighbourhood", "Scholarship", "Hipertension", "Diabetes", "Alcoholism", "Handcap", "SMS_received", "App_month", "Sche_year", "Sche_month", "is_workday")
 ```
 
 ```{r}
-for (i in quants){
-    plot <- ggplot(df, aes_string(x=i, fill=df$No_show)) +
-    geom_histogram(position="dodge")
-    print(plot)
-}
+ggplot(df, aes(x=Age, fill=No_show)) + geom_histogram(position="dodge")
+ggplot(df, aes(x=App_day, fill=No_show)) + geom_histogram(position="dodge")
+ggplot(df, aes(x=Sche_day, fill=No_show)) + geom_histogram(position="dodge")
+ggplot(df, aes(x=Sche_hour, fill=No_show)) + geom_histogram(position="dodge")
+ggplot(df, aes(x=Time_gap, fill=No_show)) + geom_histogram(position="dodge")
 ```
 
 ```{r}
@@ -55,6 +59,7 @@ ggplot(df, aes(x=Handcap)) + geom_bar(aes(fill=No_show))
 ggplot(df, aes(x=SMS_received)) + geom_bar(aes(fill=No_show))
 ggplot(df, aes(x=App_month)) + geom_bar(aes(fill=No_show))
 ggplot(df, aes(x=Sche_year)) + geom_bar(aes(fill=No_show))
+ggplot(df, aes(x=Sche_month)) + geom_bar(aes(fill=No_show))
 ggplot(df, aes(x=is_workday)) + geom_bar(aes(fill=No_show))
 
 
@@ -64,19 +69,19 @@ ggplot(df, aes(x=is_workday)) + geom_bar(aes(fill=No_show))
 ```{r}
 for (i in quants){
     plot <- ggplot(df, aes_string(df$No_show,i)) +
-    geom_violin(aes(fill=No_show))
+    geom_violin(aes(fill=No_show))+
+    xlab("No_show")
     print(plot)
 }
-```
-```{r}
-install.packages("GGally")
 ```
 
 
 ```{r}
 library(GGally)
 ```
+
 ```{r}
 ggpairs(df[quants],cardinality_threshold=100)
 ```
+
 
