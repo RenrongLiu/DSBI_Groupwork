@@ -2,11 +2,12 @@
 title: "Model"
 author: "Ruizhi Xu"
 date: "5/4/2022"
-output: html_document
+output:
+  word_document: default
+  html_document: default
 ---
 #Libraries
 ```{r}
-rm(list = ls())     # clear the workspace 
 library(ISLR)       # load ISLR data package
 library(tidyverse)
 library(ggplot2) 
@@ -19,9 +20,9 @@ library(caTools)        # Data Manipulation
 library(ggplot2)        # Data Visualization
 library(viridis)        # Data Visualization
 library(ggthemes)       # Data Visualization
-library(DMwR)           # Handle Missing Values
 library(pROC)           # Metrics
 library(caret)          # Machine Learning
+rm(list = ls())
 ```
 #Read Data
 ```{r}
@@ -248,7 +249,7 @@ table(xgb_class,test$No_show, dnn=c("predicted","actual"))
 ```
 
 
-#Modeling(after feature selection)
+#Modeling(after random forest feature selection)
 
 ##Random Forest
 ```{r}
@@ -388,24 +389,42 @@ rf_roc<-roc(test$No_show,rf_pred_prob,auc=TRUE)
 ct_roc<-roc(test$No_show,ct_bp_pred_prob,auc=TRUE)
 svm_roc<-roc(test$No_show,svm_dv,auc=TRUE)
 logit_roc<-roc(test$No_show,logit_pred_prob,auc=TRUE)
+xgb_roc<-roc(test$No_show,xgb_probs,auc=TRUE)
 rf_sel_roc<-roc(test$No_show,rf_sel_pred_prob,auc=TRUE)
 svm_sel_roc<-roc(test$No_show,svm_sel_dv,auc=TRUE)
 logit_sel_roc<-roc(test$No_show,logit_sel_pred_prob,auc=TRUE)
-xgb_roc<-roc(test$No_show,xgb_probs,auc=TRUE)
+xgb_sel_roc<-roc(test$No_show,xgb_sel_probs,auc=TRUE)
 
-plot(ct_roc,print.auc=TRUE,col="blue")
-plot(rf_roc,print.auc=TRUE,print.auc.y=.4,col="green", add=TRUE)
-plot(logit_roc,print.auc=TRUE,print.auc.y=.3, col="red",add=TRUE)
-plot(svm_roc,print.auc=TRUE,print.auc.y=.2, col="black",add=TRUE)
+
+plot(ct_roc,print.auc=TRUE,print.auc.y=.9,col="blue")
+plot(rf_roc,print.auc=TRUE,print.auc.y=.8,col="green", add=TRUE)
+plot(logit_roc,print.auc=TRUE,print.auc.y=.7, col="red",add=TRUE)
+plot(svm_roc,print.auc=TRUE,print.auc.y=.6, col="black",add=TRUE)
+plot(xgb_roc,print.auc=TRUE,print.auc.y=.5, col="pink",add=TRUE)
 plot(rf_sel_roc,print.auc=TRUE,print.auc.y=.4,col="yellow", add=TRUE)
-plot(logit_sel_roc,print.auc=TRUE,print.auc.y=.3, col="pink",add=TRUE)
-plot(svm_sel_roc,print.auc=TRUE,print.auc.y=.2, col="blue",add=TRUE)
-cbind(rf_roc,ct_roc,svm_roc,logit_roc,rf_sel_roc,svm_sel_roc,logit_sel_roc,xgb_roc)->roc_table
-roc_table['auc',]->roc_table
-
+plot(logit_sel_roc,print.auc=TRUE,print.auc.y=.3, col="purple",add=TRUE)
+plot(svm_sel_roc,print.auc=TRUE,print.auc.y=.2, col="grey",add=TRUE)
+plot(xgb_sel_roc,print.auc=TRUE,print.auc.y=.1, col="lightgreen",add=TRUE)
 
 ```
 
+
+
+```{r}
+cbind(rf_roc,ct_roc,svm_roc,logit_roc,rf_sel_roc,svm_sel_roc,logit_sel_roc,xgb_roc,xgb_sel_roc)->roc_table
+roc_table['auc',]->roc_table
+roc_table
+
+
+```
+### Best Model Performance
+```{r}
+tibble(xgb_class==test$No_show)%>%
+    ggplot(aes(x=xgb_class==test$No_show))+geom_bar(col=2,fill="yellow")
+
+  
+
+```
 
 
 

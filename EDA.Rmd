@@ -129,6 +129,10 @@ ggplot(melt_cormat, aes(x=Var1, y=Var2, fill=value)) +
 heatmap_df <- df %>% 
   select_if(is.numeric)
 
+heatmap_df <- cbind(heatmap_df,df$No_show)
+heatmap_df <- heatmap_df %>% 
+  mutate_if(~is.factor(.), as.numeric)
+
 cormat <- round(cor(heatmap_df),2)
 melt_cormat <- melt(cormat)
 
