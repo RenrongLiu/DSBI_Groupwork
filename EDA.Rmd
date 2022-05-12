@@ -12,14 +12,17 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 library(tidyverse)
 library(ggplot2)
+
+library(reshape2)
+library(moments)
 ```
 
 ```{r}
-df_2<-read_csv("")
 df <- read_csv("cleaned_data.csv") %>% 
   mutate_if(~is.numeric(.) && n_distinct(.) <8, as_factor) %>% 
   mutate_if(~is_character(.), as_factor)
 ```
+
 ```{r}
 summary(df)
 ```
@@ -66,19 +69,32 @@ ggplot(df, aes(x=is_workday)) + geom_bar(aes(fill=No_show))
 
 
 ```
+Neighbourhood is hard to interpret on histogram due to the large number of neighborhoods. Display each neighborhood's no-show rate (using original dataset to acquire true rate:
+```{r}
+unbalanced_df <- read_csv("KaggleV2-May-2016.csv")
+names(unbalanced_df)[ncol(unbalanced_df)] <- "No_show"
+```
 
 ```{r}
-<<<<<<< HEAD
-install.packages("GGally")
+unbalanced_df %>% 
+  select(c(Neighbourhood, No_show)) %>% 
+  group_by(Neighbourhood, No_show) %>%
+  summarize(n = n()) %>% 
+  mutate(No_show_rate = n/sum(n)) %>% 
+  filter(No_show == "Yes") %>% 
+  arrange(desc(No_show_rate))
+```
+
+
+```{r}
 dim(df)
-=======
+
 for (i in quants){
     plot <- ggplot(df, aes_string(df$No_show,i)) +
     geom_violin(aes(fill=No_show))+
     xlab("No_show")
     print(plot)
 }
->>>>>>> 97994f392606d0d76a20198f345104100ab9a0f0
 ```
 
 
@@ -91,4 +107,35 @@ library(GGally)
 ggpairs(df[quants],cardinality_threshold=100)
 ```
 
+### Correlation heatmap 
+drop neighbourhood and converting all categorical to numerical:
+```{r}
+heatmap_df <- df %>% 
+  select(-Neighbourhood) %>% 
+  mutate_if(~is.factor(.), as.double)
+
+cormat <- round(cor(heatmap_df),2)
+melt_cormat <- melt(cormat)
+
+ggplot(melt_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile()+
+  geom_text(aes(Var2, Var1, label = value), color = "white", size = 3) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+```
+
+# Data preprocessing
+### Remove duplicates
+```{r}
+df <- df[!duplicated(df),]
+
+dim(df)
+```
+### Skewness correction
+```{r}
+df %>% 
+  select_if(is.numeric) %>% 
+  skewness()
+```
 
