@@ -125,6 +125,22 @@ ggplot(melt_cormat, aes(x=Var1, y=Var2, fill=value)) +
         axis.title.y = element_blank())
 ```
 
+```{r}
+heatmap_df <- df %>% 
+  select_if(is.numeric)
+
+cormat <- round(cor(heatmap_df),2)
+melt_cormat <- melt(cormat)
+
+ggplot(melt_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile()+
+  geom_text(aes(Var2, Var1, label = value), color = "white", size = 3) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+```
+
+
 # Data preprocessing
 ### Remove duplicates
 ```{r}
