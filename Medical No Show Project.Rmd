@@ -27,7 +27,7 @@ library(pROC)           # Metrics
 library(caret)          # Machine Learning
 rm(list = ls())
 ```
-#Data Preprocessing
+#Data Preprocessing Part 1
 ##Preliminary Exploration
 ```{r}
 df <- read_csv('KaggleV2-May-2016.csv')
@@ -128,38 +128,6 @@ df <- df %>%
 
 head(df)
 ```
-##Undersampling
-```{r}
-set.seed(1)
-
-No_show_df <- df[df$No_show=="No",]
-No_show_df <- No_show_df[sample(nrow(No_show_df), 22319), ]
-Yes_show_df <- df[df$No_show=="Yes",]
-
-df <- rbind(No_show_df, Yes_show_df)
-```
-##Missing value and Duplicates
-```{r}
-colSums(is.na(df))
-```
-
-
-```{r}
-sum(duplicated(df))
-```
-
-```{r}
-df <- df[!duplicated(df),]
-
-dim(df)
-```
-##Skewness Correction
-```{r}
-df %>% 
-  select_if(is.numeric) %>% 
-  skewness()
-```
-
 
 #EDA
 ##Histogram 
@@ -212,7 +180,7 @@ ggpairs(df[quants],cardinality_threshold=100)
 df %>% 
   select(c(Neighbourhood, No_show)) %>% 
   group_by(Neighbourhood, No_show) %>%
-  summarize(n = n()) %>% 
+  dplyr::summarize(n = n()) %>% 
   mutate(No_show_rate = n/sum(n)) %>% 
   filter(No_show == "Yes") %>% 
   arrange(desc(No_show_rate))
@@ -252,6 +220,45 @@ ggplot(melt_cormat, aes(x=Var1, y=Var2, fill=value)) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
         axis.title.x = element_blank(),
         axis.title.y = element_blank())
+```
+#Data Preprocessing Part 2
+##Missing Value
+```{r}
+colSums(is.na(df))
+```
+##Duplicates
+```{r}
+sum(duplicated(df))
+df <- df[!duplicated(df),]
+
+dim(df)
+```
+##Skewness Correction
+```{r}
+df %>% 
+  select_if(is.numeric) %>% 
+  skewness()
+class(df$Age)
+```
+##Undersampling
+```{r}
+set.seed(1)   # set a random seed 
+full_tree<-rpart(No_show~.,
+                     data=df, 
+                     method="class",
+                     control=rpart.control(cp=0,maxdepth=5))
+rpart.plot(full_tree)
+###Becuase the tree model is a naive classifer, 80% of the target are "No".We undersample our data 
+```
+
+```{r}
+set.seed(1)
+
+No_show_df <- df[df$No_show=="No",]
+No_show_df <- No_show_df[sample(nrow(No_show_df), 22319), ]
+Yes_show_df <- df[df$No_show=="Yes",]
+
+df <- rbind(No_show_df, Yes_show_df)
 ```
 
 #Modeling
