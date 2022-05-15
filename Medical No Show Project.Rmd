@@ -1,0 +1,672 @@
+---
+title: "Medical No Show Project"
+author: "Ruizhi Xu"
+date: "5/4/2022"
+output:
+  word_document: default
+  html_document: default
+---
+#Libraries
+```{r}
+library(ISLR)       # load ISLR data package
+library(tidyverse)
+library(ggplot2) 
+library(plyr)
+library(reshape2)
+library(moments)
+library(GGally)         # Pairplot
+library(readr)          # Data Input
+library(lubridate)      # Data Manupulation
+library(dplyr)          # Data Manipulation
+library(reshape2)       # Data Manipulation
+library(caTools)        # Data Manipulation
+library(ggplot2)        # Data Visualization
+library(viridis)        # Data Visualization
+library(ggthemes)       # Data Visualization
+library(pROC)           # Metrics
+library(caret)          # Machine Learning
+rm(list = ls())
+```
+#Data Preprocessing
+##Preliminary Exploration
+```{r}
+df <- read_csv('KaggleV2-May-2016.csv')
+```
+
+```{r}
+head(df)
+### Categorize gender, scholarship, hipertension, diabetes, alcoholism, handcap, SMS_received, No-show
+### examine date columns for further processing
+### examine Neighbourhood for categorization
+### drop IDs
+```
+
+```{r}
+summary(df)
+```
+
+```{r}
+df <- read_csv('KaggleV2-May-2016.csv') %>% 
+  mutate_if(~is.character(.) && n_distinct(.)<10, as_factor) %>% 
+  mutate_if(~is.double(.) && n_distinct(.)<10, as_factor)
+
+head(df)
+```
+remove ID columns, change column name No-show
+```{r}
+df <- df %>% 
+  select(-c(PatientId, AppointmentID))
+
+names(df)[ncol(df)] <- "No_show"
+```
+##Investigate Neighbourhood column
+```{r}
+df %>% 
+  group_by(Neighbourhood) %>% 
+  tally(sort=TRUE)
+```
+Possible methods:
+1. categorize, move minority neighbourhoods into "others"
+2. Regroup neighbourhoods into larger geographical groups (district, city, etc)
+```{r}
+df <- df %>% 
+  mutate(Neighbourhood = as_factor(Neighbourhood))
+```
+##Investigate Data Column
+```{r}
+range(df$AppointmentDay)
+range(df$ScheduledDay)
+```
+year seems unimportant
+possible methods:
+1. extract month, day, hours for further processing (workday vs holiday, morning/afternoon/night)
+2. days between scheduled day and appointment day.
+
+extract month, day from appointment. year, month, day, hour from scheduled.
+```{r}
+df <- df %>% 
+  mutate(App_month = month(AppointmentDay),
+         App_day = day(AppointmentDay),
+         Sche_year = year(ScheduledDay),
+         Sche_month = month(ScheduledDay),
+         Sche_day = day(ScheduledDay),
+         Sche_hour = hour(ScheduledDay))
+
+head(df)
+```
+time gap between scheduled day and appointment day
+```{r}
+df <- df %>% 
+  mutate(Time_gap = difftime(AppointmentDay, as.Date(ScheduledDay), units="days")) %>% 
+  mutate(Time_gap = as.integer(Time_gap))
+
+sample(df$Time_gap,5)
+```
+is_workday
+```{r}
+### All Brazilian holidays between 04-29 to 06-08
+holidays = c(ymd("2016-05-01"), ymd("2016-05-08"))
+
+is_holiday = df$AppointmentDay %in% holidays
+sum(is_holiday)
+# No appointment made in holiday
+```
+
+```{r}
+is_weekday = wday(df$AppointmentDay)<6
+sum(is_weekday)/length(is_weekday)
+
+df <- df %>% 
+  mutate(is_workday = as_factor(as.integer(is_weekday)))
+
+levels(df$is_workday)
+```
+drop date column
+```{r}
+df <- df %>% 
+  select(-c(AppointmentDay, ScheduledDay))
+
+head(df)
+```
+##Undersampling
+```{r}
+set.seed(1)
+
+No_show_df <- df[df$No_show=="No",]
+No_show_df <- No_show_df[sample(nrow(No_show_df), 22319), ]
+Yes_show_df <- df[df$No_show=="Yes",]
+
+df <- rbind(No_show_df, Yes_show_df)
+```
+##Missing value and Duplicates
+```{r}
+colSums(is.na(df))
+```
+
+
+```{r}
+sum(duplicated(df))
+```
+
+```{r}
+df <- df[!duplicated(df),]
+
+dim(df)
+```
+##Skewness Correction
+```{r}
+df %>% 
+  select_if(is.numeric) %>% 
+  skewness()
+```
+
+
+#EDA
+##Histogram 
+```{r}
+quants = c("Age", "App_day", "Sche_day", "Sche_hour", "Time_gap")
+cate = c("Gender", "Neighbourhood", "Scholarship", "Hipertension", "Diabetes", "Alcoholism", "Handcap", "SMS_received", "App_month", "Sche_year", "Sche_month", "is_workday")
+```
+
+```{r}
+ggplot(df, aes(x=Age, fill=No_show)) + geom_histogram(position="dodge")
+ggplot(df, aes(x=App_day, fill=No_show)) + geom_histogram(position="dodge")
+ggplot(df, aes(x=Sche_day, fill=No_show)) + geom_histogram(position="dodge")
+ggplot(df, aes(x=Sche_hour, fill=No_show)) + geom_histogram(position="dodge")
+ggplot(df, aes(x=Time_gap, fill=No_show)) + geom_histogram(position="dodge")
+```
+
+##Bar chart
+```{r}
+ggplot(df, aes(x=Gender)) + geom_bar(aes(fill=No_show))
+ggplot(df, aes(x=Neighbourhood)) + geom_bar(aes(fill=No_show))+ scale_x_discrete(labels = NULL, breaks = NULL) + labs(x = "")
+ggplot(df, aes(x=Scholarship)) + geom_bar(aes(fill=No_show))
+ggplot(df, aes(x=Hipertension)) + geom_bar(aes(fill=No_show))
+ggplot(df, aes(x=Diabetes)) + geom_bar(aes(fill=No_show))
+ggplot(df, aes(x=Alcoholism)) + geom_bar(aes(fill=No_show))
+ggplot(df, aes(x=Handcap)) + geom_bar(aes(fill=No_show))
+ggplot(df, aes(x=SMS_received)) + geom_bar(aes(fill=No_show))
+ggplot(df, aes(x=App_month)) + geom_bar(aes(fill=No_show))
+ggplot(df, aes(x=Sche_year)) + geom_bar(aes(fill=No_show))
+ggplot(df, aes(x=Sche_month)) + geom_bar(aes(fill=No_show))
+ggplot(df, aes(x=is_workday)) + geom_bar(aes(fill=No_show))
+```
+##Violin plot
+```{r}
+dim(df)
+
+for (i in quants){
+    plot <- ggplot(df, aes_string(df$No_show,i)) +
+    geom_violin(aes(fill=No_show))+
+    xlab("No_show")
+    print(plot)
+}
+```
+
+##Pairplot of quantitative variables
+```{r}
+ggpairs(df[quants],cardinality_threshold=100)
+```
+## Neighbourhood handling
+```{r}
+df %>% 
+  select(c(Neighbourhood, No_show)) %>% 
+  group_by(Neighbourhood, No_show) %>%
+  summarize(n = n()) %>% 
+  mutate(No_show_rate = n/sum(n)) %>% 
+  filter(No_show == "Yes") %>% 
+  arrange(desc(No_show_rate))
+```
+drop neighbourhood and converting all categorical to numerical:
+##Correlation heatmap
+```{r}
+heatmap_df <- df %>% 
+  select(-Neighbourhood) %>% 
+  mutate_if(~is.factor(.), as.double)
+
+cormat <- round(cor(heatmap_df),2)
+melt_cormat <- melt(cormat)
+
+ggplot(melt_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile()+
+  geom_text(aes(Var2, Var1, label = value), color = "white", size = 3) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+```
+
+```{r}
+heatmap_df <- df %>% 
+  select_if(is.numeric)
+
+heatmap_df <- cbind(heatmap_df,df$No_show)
+heatmap_df <- heatmap_df %>% 
+  mutate_if(~is.factor(.), as.numeric)
+
+cormat <- round(cor(heatmap_df),2)
+melt_cormat <- melt(cormat)
+
+ggplot(melt_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile()+
+  geom_text(aes(Var2, Var1, label = value), color = "white", size = 3) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+```
+
+#Modeling
+##Split the Data (Holdout sampling)
+```{r}
+df<-df[,-c(3)]
+set.seed(1)
+index<-sample(nrow(df),0.2*nrow(df))
+test<-df[index,]
+train<-df[-index,]
+```
+
+
+## Classification tree
+```{r}
+library(rpart)
+library(rpart.plot)
+```
+
+```{r}
+set.seed(1)   # set a random seed 
+full_tree<-rpart(No_show~.,
+                     data=train, 
+                     method="class",
+                     control=rpart.control(cp=0,maxdepth=10))
+rpart.plot(full_tree)
+```
+
+
+```{r}
+ct_pred_prob<-predict(full_tree,test)[,2]
+ct_pred_class<-predict(full_tree,test,type="class")
+```
+###Cross Validation
+```{r}
+printcp(full_tree)
+plotcp(full_tree)    
+```
+
+
+```{r}
+min_xerror<-full_tree$cptable[which.min(full_tree$cptable[,"xerror"]),]
+min_xerror
+
+# prune tree with minimum cp value
+min_xerror_tree<-prune(full_tree, cp=min_xerror[1])
+rpart.plot(min_xerror_tree)
+```
+```{r}
+bp_tree<-min_xerror_tree
+ct_bp_pred_prob<-predict(bp_tree,test)[,2]
+ct_bp_pred_class=ifelse(ct_bp_pred_prob>0.5,"Yes","No")
+```
+###Metrics
+```{r}
+table(ct_bp_pred_class==test$No_show)  
+table(ct_bp_pred_class,test$No_show, dnn=c("predicted","actual")) 
+```
+
+##Random Forest
+```{r}
+library(randomForest)
+```
+
+```{r}
+set.seed(1)
+rf_training_model<-randomForest(No_show~.,              # model formula
+                       data=train,          # use a training dataset for building a model
+                       ntree=500,                     
+                       cutoff=c(0.5,0.5), 
+                       mtry=2, ## number of variables considered in each splits when lots of variables is useful
+                       importance=TRUE)
+rf_training_model
+```
+###Hypertuning
+```{r}
+set.seed(1)              
+res <- tuneRF(x = train%>%select(-No_show),
+              y = train$No_show,mtryStart=2,
+              ntreeTry = 500)
+```
+
+```{r}
+rf_best_model<-randomForest(No_show~.,              # model formula
+                       data=train,          # use a training dataset for building a model
+                       ntree=500,                     
+                       cutoff=c(0.5,0.5), 
+                       mtry=2,
+                       importance=TRUE)
+rf_best_model
+```
+###Metrics
+```{r}
+rf_pred_prob<-predict(rf_best_model,test,type="prob")[,2]   #use a test dataset for model evaluation
+rf_pred_class<-predict(rf_best_model,test,type="class")
+table(test$No_show==rf_pred_class) 
+table(rf_pred_class,test$No_show, dnn=c("predicted","actual")) 
+```
+##SVM
+```{r}
+library(e1071)
+model_svm<-svm(formula= No_show ~ ., # model formula 
+               data=train,                   # dataset
+               kernel="linear",  # this is the form of the decision boundary. Let's start with a linear kernel. 
+               cost=0.1)   
+```
+
+```{r}
+dv<-data.frame(model_svm$decision.values)
+head(dv)
+
+ggplot(dv,aes(x=No.Yes)) +
+  geom_histogram(colour="black",fill="white")
+```
+
+```{r}
+head(model_svm$fitted)      #class prediction result
+table(model_svm$fitted)
+
+predicted_svm<-predict(model_svm, test, decision.values = TRUE)   # to get the decision value  ##TRUE get decision values
+head(attr(predicted_svm, "decision.values"))
+```
+
+###Metrics
+
+```{r}
+svm_pred_class <- predict(model_svm, test)           #class prediction
+svm_dv<-c(attr(predicted_svm, "decision.values"))
+table(test$No_show==svm_pred_class) 
+table(svm_pred_class,test$No_show, dnn=c("predicted","actual"))
+```
+
+##Logistic Regression
+```{r}
+set.seed(1)
+logit_training_model<-glm(No_show~.,family="binomial",data=train)
+summary(logit_training_model)
+
+logit_pred_prob<-predict(logit_training_model,test,type="response")
+## Logsitc regression could not use the class type to predict, we need to use ifelse
+logit_pred_class<-ifelse(logit_pred_prob>0.5,"Yes","No")
+
+table(test$No_show==logit_pred_class)
+
+
+```
+###Hypertuning(Stepwise Regression)
+```{r}
+# Specify a null model with no predictors
+null_model <- glm(No_show~1, data = train, family = "binomial")
+
+# Specify the full model using all of the potential predictors
+full_model <- glm(No_show~., data = train, family = "binomial")
+
+# Use a forward stepwise algorithm to build a parsimonious model
+forward_model <- step(null_model, scope = list(lower = null_model, upper = full_model), direction = "forward")
+summary(forward_model)
+# Use a forward stepwise algorithm to build a parsimonious model
+backward_model <- step(full_model, scope = list(lower = null_model, upper = full_model), direction = "backward")
+summary(backward_model)
+```
+
+```{r}
+#Since forward model has lower AIC, we choose variables in forward model summary
+logit_best_model<-glm(No_show~Time_gap+Age+SMS_received+Sche_month+Sche_day+Sche_year+Sche_hour+
+                      Scholarship+App_month+App_day+is_workday+Diabetes+Alcoholism,
+                      family="binomial",data=train)
+summary(logit_best_model)
+head(test)
+
+```
+###Metrics
+```{r}
+logit_pred_prob<-predict(logit_best_model,test,type="response")
+logit_pred_class<-ifelse(logit_pred_prob>0.5,"Yes","No") 
+glimpse(test)
+table(test$No_show==logit_pred_class)
+table(logit_pred_class,test$No_show, dnn=c("predicted","actual")) 
+```
+##XGboost
+```{r}
+
+fit.control = trainControl(method="cv",number=3,
+                           classProbs = TRUE,summaryFunction = twoClassSummary)
+
+xgb.grid = expand.grid(eta=c(0.05),
+                       max_depth=c(4),colsample_bytree=1,
+                       subsample=1,nrounds=1501,gamma=0,min_child_weight=5)
+set.seed(38)
+xgb_model = train(No_show ~ .,data=train,method="xgbTree",metric="ROC",
+                  tuneGrid=xgb.grid, trControl=fit.control)
+
+```
+
+###Metric
+```{r}
+xgb_class = predict(xgb_model,newdata=test)
+xgb_probs = predict(xgb_model,newdata=test,type="prob")[,2]
+
+table(xgb_class==test$No_show)
+table(xgb_class,test$No_show, dnn=c("predicted","actual")) 
+
+
+```
+
+
+#Modeling(after random forest feature selection)
+
+##Random Forest
+```{r}
+set.seed(1)
+rf_sel_training_model<-randomForest(No_show~Time_gap+Age+Sche_hour+Sche_day+Sche_month+App_day+App_month,              # model formula
+                       data=train,          # use a training dataset for building a model
+                       ntree=500,                     
+                       cutoff=c(0.5,0.5), 
+                       mtry=2, ## number of variables considered in each splits when lots of variables is useful
+                       importance=TRUE)
+rf_sel_training_model
+```
+
+###Hypertuning
+```{r}
+set.seed(1)              
+res <- tuneRF(x = train%>%select(-No_show),
+              y = train$No_show,mtryStart=2,
+              ntreeTry = 500)
+```
+
+
+```{r}
+rf_sel_best_model<-randomForest(No_show~Time_gap+Time_gap+Age+Sche_hour+Sche_day+Sche_month+App_day+App_month,              # model formula
+                       data=train,          # use a training dataset for building a model
+                       ntree=500,                     
+                       cutoff=c(0.5,0.5), 
+                       mtry=2,
+                       importance=TRUE)
+rf_sel_best_model
+```
+
+###Metric
+```{r}
+rf_sel_pred_prob<-predict(rf_sel_best_model,test,type="prob")[,2]   #use a test dataset for model evaluation
+rf_sel_pred_class<-predict(rf_sel_best_model,test,type="class")
+table(test$No_show==rf_sel_pred_class) 
+table(rf_sel_pred_class,test$No_show, dnn=c("predicted","actual")) 
+```
+
+##SVM
+```{r}
+library(e1071)
+model_sel_svm<-svm(formula= No_show ~Time_gap+Age+Sche_hour+Sche_day+Sche_month+App_day+App_month, # model formula 
+               data=train,                   # dataset
+               kernel="linear",  # this is the form of the decision boundary. Let's start with a linear kernel. 
+               cost=0.1)   
+```
+
+```{r}
+sel_dv<-data.frame(model_sel_svm$decision.values)
+head(dv)
+
+ggplot(sel_dv,aes(x=No.Yes)) +
+  geom_histogram(colour="black",fill="white")
+```
+
+```{r}
+
+predicted_sel_svm<-predict(model_sel_svm, test, decision.values = TRUE)   # to get the decision value  ##TRUE get decision values
+head(attr(predicted_sel_svm, "decision.values"))
+```
+###Metric
+```{r}
+svm_sel_pred_class <- predict(model_sel_svm, test)           #class prediction
+svm_sel_dv<-c(attr(predicted_sel_svm, "decision.values"))
+table(test$No_show==svm_sel_pred_class) 
+table(svm_sel_pred_class,test$No_show, dnn=c("predicted","actual"))
+```
+##Logistic Regression
+```{r}
+set.seed(1)
+logit_sel_training_model<-glm(No_show~Time_gap+Age+Sche_hour+Sche_day+Sche_month+App_day+App_month,family="binomial",data=train)
+summary(logit_sel_training_model)
+
+logit_sel_pred_prob<-predict(logit_sel_training_model,test,type="response")
+## Logsitc regression could not use the class type to predict, we need to use ifelse
+logit_sel_pred_class<-ifelse(logit_sel_pred_prob>0.5,"Yes","No")
+
+table(test$No_show==logit_sel_pred_class)
+```
+###Hypertuning 
+```{r}
+# Specify a null model with no predictors
+null_model <- glm(No_show~1, data = train, family = "binomial")
+
+# Specify the full model using all of the potential predictors
+full_model <- glm(No_show~Time_gap+Age+Sche_hour+SMS_received, data = train, family = "binomial")
+
+# Use a forward stepwise algorithm to build a parsimonious model
+forward_model <- step(null_model, scope = list(lower = null_model, upper = full_model), direction = "forward")
+summary(forward_model)
+# Use a forward stepwise algorithm to build a parsimonious model
+backward_model <- step(full_model, scope = list(lower = null_model, upper = full_model), direction = "backward")
+summary(backward_model)
+```
+```{r}
+logit_sel_best_model<-glm(No_show~Time_gap+Age+SMS_received+Sche_hour,
+                      family="binomial",data=train)
+summary(logit_sel_best_model)
+```
+
+
+###Metrics
+```{r}
+#Best model is all those four varibales included 
+logit_sel_pred_prob<-predict(logit_sel_best_model,test,type="response")
+logit_sel_pred_class<-ifelse(logit_sel_pred_prob>0.5,"Yes","No") 
+glimpse(test)
+table(test$No_show==logit_sel_pred_class)
+table(logit_sel_pred_class,test$No_show, dnn=c("predicted","actual")) 
+
+```
+##XGboost
+```{r}
+fit.control = trainControl(method="cv",number=3,
+                           classProbs = TRUE,summaryFunction = twoClassSummary)
+
+xgb.grid = expand.grid(eta=c(0.05),
+                       max_depth=c(4),colsample_bytree=1,
+                       subsample=1,nrounds=1501,gamma=0,min_child_weight=5)
+set.seed(38)
+xgb_sel_model = train(No_show ~ Time_gap+Age+Sche_hour+Sche_day+Sche_month+App_day+App_month,data=train,method="xgbTree",metric="ROC",
+                  tuneGrid=xgb.grid, trControl=fit.control)
+
+```
+
+###Metric
+```{r}
+xgb_sel_class = predict(xgb_sel_model,newdata=test)
+xgb_sel_probs = predict(xgb_sel_model,newdata=test,type="prob")[,2]
+
+table(xgb_sel_class==test$No_show)
+table(xgb_sel_class,test$No_show, dnn=c("predicted","actual")) 
+```
+
+
+
+# Performance of all models
+## ROC_AUC
+```{r}
+library(pROC)
+rf_roc<-roc(test$No_show,rf_pred_prob,auc=TRUE)
+ct_roc<-roc(test$No_show,ct_bp_pred_prob,auc=TRUE)
+svm_roc<-roc(test$No_show,svm_dv,auc=TRUE)
+logit_roc<-roc(test$No_show,logit_pred_prob,auc=TRUE)
+xgb_roc<-roc(test$No_show,xgb_probs,auc=TRUE)
+rf_sel_roc<-roc(test$No_show,rf_sel_pred_prob,auc=TRUE)
+svm_sel_roc<-roc(test$No_show,svm_sel_dv,auc=TRUE)
+logit_sel_roc<-roc(test$No_show,logit_sel_pred_prob,auc=TRUE)
+xgb_sel_roc<-roc(test$No_show,xgb_sel_probs,auc=TRUE)
+
+
+plot(ct_roc,print.auc=TRUE,print.auc.y=.9,col="blue")
+plot(rf_roc,print.auc=TRUE,print.auc.y=.8,col="green", add=TRUE)
+plot(logit_roc,print.auc=TRUE,print.auc.y=.7, col="red",add=TRUE)
+plot(svm_roc,print.auc=TRUE,print.auc.y=.6, col="black",add=TRUE)
+plot(xgb_roc,print.auc=TRUE,print.auc.y=.5, col="pink",add=TRUE)
+plot(rf_sel_roc,print.auc=TRUE,print.auc.y=.4,col="yellow", add=TRUE)
+plot(logit_sel_roc,print.auc=TRUE,print.auc.y=.3, col="purple",add=TRUE)
+plot(svm_sel_roc,print.auc=TRUE,print.auc.y=.2, col="grey",add=TRUE)
+plot(xgb_sel_roc,print.auc=TRUE,print.auc.y=.1, col="lightgreen",add=TRUE)
+
+```
+
+
+
+```{r}
+cbind(rf_roc,ct_roc,svm_roc,logit_roc,rf_sel_roc,svm_sel_roc,logit_sel_roc,xgb_roc,xgb_sel_roc)->roc_table
+roc_table['auc',]->roc_table
+roc_table
+
+
+```
+### Best Model Performance
+```{r}
+tibble(xgb_class==test$No_show)%>%
+    ggplot(aes(x=xgb_class==test$No_show))+geom_bar(col=2,fill="yellow")
+
+```
+##Accuracy
+```{r}
+table(ct_bp_pred_class==test$No_show)->ct_table
+table(xgb_class==test$No_show)->xgb_table
+table(xgb_sel_class==test$No_show)->xgb_sel_table
+table(logit_pred_class==test$No_show)->logit_table
+table(logit_sel_pred_class==test$No_show)->logit_sel_table
+table(predicted_sel_svm==test$No_show)->svm_sel_table
+table(predicted_svm==test$No_show)->svm_table
+table(rf_pred_class==test$No_show)->rf_table
+table(rf_sel_pred_class==test$No_show)->rf_sel_table
+
+```
+
+```{r}
+ct_table[2]/(ct_table[1]+ct_table[2])->ct_correct
+xgb_table[2]/(xgb_table[1]+xgb_table[2])->xgb_correct
+xgb_sel_table[2]/(xgb_sel_table[1]+xgb_sel_table[2])->xgb_sel_correct
+logit_table[2]/(logit_table[1]+logit_table[2])->logit_correct
+logit_sel_table[2]/(logit_sel_table[1]+logit_sel_table[2])->logit_sel_correct
+svm_table[2]/(svm_table[1]+svm_table[2])->svm_correct
+svm_sel_table[2]/(svm_sel_table[1]+svm_sel_table[2])->svm_sel_correct
+rf_table[2]/(rf_table[1]+rf_table[2])->rf_correct
+rf_sel_table[2]/(rf_sel_table[1]+rf_sel_table[2])->rf_sel_correct
+```
+
+```{r}
+rbind(ct_correct,xgb_sel_correct,xgb_sel_correct,logit_sel_correct,logit_correct,svm_correct,svm_sel_correct,rf_correct,rf_sel_correct)->accuracy
+accuracy
+```
+
