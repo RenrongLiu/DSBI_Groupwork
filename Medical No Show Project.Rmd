@@ -14,6 +14,8 @@ library(ggplot2)
 library(plyr)
 library(reshape2)
 library(moments)
+library(rpart)
+library(rpart.plot)
 library(GGally)         # Pairplot
 library(readr)          # Data Input
 library(lubridate)      # Data Manupulation
@@ -553,7 +555,7 @@ table(test$No_show==logit_sel_pred_class)
 null_model <- glm(No_show~1, data = train, family = "binomial")
 
 # Specify the full model using all of the potential predictors
-full_model <- glm(No_show~Time_gap+Age+Sche_hour+SMS_received, data = train, family = "binomial")
+full_model <- glm(No_show~Time_gap+Age+Sche_hour+Sche_day+Sche_month+App_day+App_month, data = train, family = "binomial")
 
 # Use a forward stepwise algorithm to build a parsimonious model
 forward_model <- step(null_model, scope = list(lower = null_model, upper = full_model), direction = "forward")
@@ -563,7 +565,7 @@ backward_model <- step(full_model, scope = list(lower = null_model, upper = full
 summary(backward_model)
 ```
 ```{r}
-logit_sel_best_model<-glm(No_show~Time_gap+Age+SMS_received+Sche_hour,
+logit_sel_best_model<-glm(No_show~Time_gap+Age+Sche_month+Sche_hour+App_month,
                       family="binomial",data=train)
 summary(logit_sel_best_model)
 ```
