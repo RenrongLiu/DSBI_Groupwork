@@ -422,7 +422,7 @@ summary(backward_model)
 ```
 
 ```{r}
-#Since forward model has lower AIC, we choose variables in forward model summary
+#Since backward model has lower AIC, we choose variables in forward model summary
 logit_best_model<-glm(No_show~Time_gap+Age+SMS_received+Sche_month+Sche_day+Sche_year+Sche_hour+
                       Scholarship+App_month+App_day+is_workday+Diabetes+Alcoholism,
                       family="binomial",data=train)
