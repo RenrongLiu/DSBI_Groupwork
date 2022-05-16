@@ -77,10 +77,9 @@ names(unbalanced_df)[ncol(unbalanced_df)] <- "No_show"
 
 ```{r}
 unbalanced_df %>% 
-  select(c(Neighbourhood, No_show)) %>% 
   group_by(Neighbourhood, No_show) %>%
-  summarize(n = n()) %>% 
-  mutate(No_show_rate = n/sum(n)) %>% 
+  summarise(n = n()) %>% 
+  mutate(No_show_rate = n /sum(n)) %>% 
   filter(No_show == "Yes") %>% 
   arrange(desc(No_show_rate))
 ```

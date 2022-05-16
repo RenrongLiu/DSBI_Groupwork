@@ -209,13 +209,19 @@ ggpairs(df[quants],cardinality_threshold=100)
 ```
 ## Neighbourhood handling
 ```{r}
-df %>% 
+detach(package:plyr)
+unbalanced_df <- read_csv("KaggleV2-May-2016.csv")
+names(unbalanced_df)[ncol(unbalanced_df)] <- "No_show"
+
+unbalanced_df %>% 
   select(c(Neighbourhood, No_show)) %>% 
   group_by(Neighbourhood, No_show) %>%
   summarize(n = n()) %>% 
   mutate(No_show_rate = n/sum(n)) %>% 
   filter(No_show == "Yes") %>% 
   arrange(desc(No_show_rate))
+
+library(plyr)
 ```
 drop neighbourhood and converting all categorical to numerical:
 ##Correlation heatmap
