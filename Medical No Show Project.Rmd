@@ -675,7 +675,7 @@ rf_sel_table[2]/(rf_sel_table[1]+rf_sel_table[2])->rf_sel_correct
 ```
 
 ```{r}
-rbind(ct_correct,xgb_sel_correct,xgb_sel_correct,logit_sel_correct,logit_correct,svm_correct,svm_sel_correct,rf_correct,rf_sel_correct)->accuracy
+rbind(ct_correct,xgb_correct,xgb_sel_correct,logit_sel_correct,logit_correct,svm_correct,svm_sel_correct,rf_correct,rf_sel_correct)->accuracy
 accuracy
 ```
 
