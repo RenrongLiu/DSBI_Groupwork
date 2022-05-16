@@ -14,6 +14,8 @@ library(ggplot2)
 library(plyr)
 library(reshape2)
 library(moments)
+library(rpart)
+library(rpart.plot)
 library(GGally)         # Pairplot
 library(readr)          # Data Input
 library(lubridate)      # Data Manupulation
@@ -27,7 +29,7 @@ library(pROC)           # Metrics
 library(caret)          # Machine Learning
 rm(list = ls())
 ```
-#Data Preprocessing
+#Data Preprocessing Part 1
 ##Preliminary Exploration
 ```{r}
 df <- read_csv('KaggleV2-May-2016.csv')
@@ -128,38 +130,6 @@ df <- df %>%
 
 head(df)
 ```
-##Undersampling
-```{r}
-set.seed(1)
-
-No_show_df <- df[df$No_show=="No",]
-No_show_df <- No_show_df[sample(nrow(No_show_df), 22319), ]
-Yes_show_df <- df[df$No_show=="Yes",]
-
-df <- rbind(No_show_df, Yes_show_df)
-```
-##Missing value and Duplicates
-```{r}
-colSums(is.na(df))
-```
-
-
-```{r}
-sum(duplicated(df))
-```
-
-```{r}
-df <- df[!duplicated(df),]
-
-dim(df)
-```
-##Skewness Correction
-```{r}
-df %>% 
-  select_if(is.numeric) %>% 
-  skewness()
-```
-
 
 #EDA
 ##Histogram 
@@ -216,7 +186,7 @@ names(unbalanced_df)[ncol(unbalanced_df)] <- "No_show"
 unbalanced_df %>% 
   select(c(Neighbourhood, No_show)) %>% 
   group_by(Neighbourhood, No_show) %>%
-  summarize(n = n()) %>% 
+  dplyr::summarize(n = n()) %>% 
   mutate(No_show_rate = n/sum(n)) %>% 
   filter(No_show == "Yes") %>% 
   arrange(desc(No_show_rate))
@@ -258,6 +228,45 @@ ggplot(melt_cormat, aes(x=Var1, y=Var2, fill=value)) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
         axis.title.x = element_blank(),
         axis.title.y = element_blank())
+```
+#Data Preprocessing Part 2
+##Missing Value
+```{r}
+colSums(is.na(df))
+```
+##Duplicates
+```{r}
+sum(duplicated(df))
+df <- df[!duplicated(df),]
+
+dim(df)
+```
+##Skewness Correction
+```{r}
+df %>% 
+  select_if(is.numeric) %>% 
+  skewness()
+class(df$Age)
+```
+##Undersampling
+```{r}
+set.seed(1)   # set a random seed 
+full_tree<-rpart(No_show~.,
+                     data=df, 
+                     method="class",
+                     control=rpart.control(cp=0,maxdepth=5))
+rpart.plot(full_tree)
+###Becuase the tree model is a naive classifer, 80% of the target are "No".We undersample our data 
+```
+
+```{r}
+set.seed(1)
+
+No_show_df <- df[df$No_show=="No",]
+No_show_df <- No_show_df[sample(nrow(No_show_df), 22319), ]
+Yes_show_df <- df[df$No_show=="Yes",]
+
+df <- rbind(No_show_df, Yes_show_df)
 ```
 
 #Modeling
@@ -421,7 +430,7 @@ summary(backward_model)
 ```
 
 ```{r}
-#Since forward model has lower AIC, we choose variables in forward model summary
+#Since backward model has lower AIC, we choose variables in forward model summary
 logit_best_model<-glm(No_show~Time_gap+Age+SMS_received+Sche_month+Sche_day+Sche_year+Sche_hour+
                       Scholarship+App_month+App_day+is_workday+Diabetes+Alcoholism,
                       family="binomial",data=train)
@@ -552,7 +561,7 @@ table(test$No_show==logit_sel_pred_class)
 null_model <- glm(No_show~1, data = train, family = "binomial")
 
 # Specify the full model using all of the potential predictors
-full_model <- glm(No_show~Time_gap+Age+Sche_hour+SMS_received, data = train, family = "binomial")
+full_model <- glm(No_show~Time_gap+Age+Sche_hour+Sche_day+Sche_month+App_day+App_month, data = train, family = "binomial")
 
 # Use a forward stepwise algorithm to build a parsimonious model
 forward_model <- step(null_model, scope = list(lower = null_model, upper = full_model), direction = "forward")
@@ -562,7 +571,7 @@ backward_model <- step(full_model, scope = list(lower = null_model, upper = full
 summary(backward_model)
 ```
 ```{r}
-logit_sel_best_model<-glm(No_show~Time_gap+Age+SMS_received+Sche_hour,
+logit_sel_best_model<-glm(No_show~Time_gap+Age+Sche_month+Sche_hour+App_month,
                       family="binomial",data=train)
 summary(logit_sel_best_model)
 ```
@@ -672,7 +681,7 @@ rf_sel_table[2]/(rf_sel_table[1]+rf_sel_table[2])->rf_sel_correct
 ```
 
 ```{r}
-rbind(ct_correct,xgb_sel_correct,xgb_sel_correct,logit_sel_correct,logit_correct,svm_correct,svm_sel_correct,rf_correct,rf_sel_correct)->accuracy
+rbind(ct_correct,xgb_correct,xgb_sel_correct,logit_sel_correct,logit_correct,svm_correct,svm_sel_correct,rf_correct,rf_sel_correct)->accuracy
 accuracy
 ```
 
